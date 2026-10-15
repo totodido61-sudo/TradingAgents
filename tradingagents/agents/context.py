@@ -58,7 +58,8 @@ def get_trading_style_instruction() -> str:
         " (ATR), gaps and same-day catalysts; long-term fundamentals matter only as they move"
         " price that day. The risk appetite is aggressive: accept wider swings and larger"
         " position sizes for a stronger expected move, and still state the entry, a stop-loss"
-        " and a same-day profit target as absolute prices. Short the instrument (Sell /"
+        " and a same-day profit target (the price target) as absolute prices, and give the"
+        " time horizon as intraday. Short the instrument (Sell /"
         " Underweight) when the next session's edge is to the downside."
     )
 
