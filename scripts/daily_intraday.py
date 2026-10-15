@@ -1,0 +1,84 @@
+"""Intraday call for the next session on each ticker, for a scheduled daily run.
+
+Analyses the last completed trading day and prints one summary block per ticker,
+marking whether the call is a move to make (Buy / Overweight / Underweight / Sell)
+or a Hold. Exits 0 even when a ticker fails, so one bad ticker does not hide the
+others; the failure is printed in its block.
+
+    python scripts/daily_intraday.py AAPL NVDA
+
+The provider, models and language come from the TRADINGAGENTS_* environment,
+with Gemini Flash and Italian as the defaults here.
+"""
+
+import argparse
+import datetime as dt
+import os
+import time
+
+from tradingagents.default_config import build_default_config
+from tradingagents.graph.trading_graph import TradingAgentsGraph
+
+ACTIONABLE = {"Buy", "Overweight", "Underweight", "Sell"}
+TRANSIENT = ("503", "UNAVAILABLE", "disconnected")
+
+
+def last_completed_session(today: dt.date) -> dt.date:
+    """The weekday before ``today``; exchange holidays fall back to the prior bar."""
+    day = today - dt.timedelta(days=1)
+    while day.weekday() >= 5:
+        day -= dt.timedelta(days=1)
+    return day
+
+
+def config() -> dict:
+    env_defaults = {
+        "TRADINGAGENTS_LLM_PROVIDER": "google",
+        "TRADINGAGENTS_DEEP_THINK_LLM": "gemini-3.5-flash",
+        "TRADINGAGENTS_QUICK_THINK_LLM": "gemini-3.5-flash-lite",
+        "TRADINGAGENTS_OUTPUT_LANGUAGE": "Italian",
+        "TRADINGAGENTS_TRADING_STYLE": "intraday",
+        "TRADINGAGENTS_HOLDING_PERIOD_DAYS": "1",
+        "TRADINGAGENTS_LLM_MAX_RETRIES": "10",
+    }
+    for key, value in env_defaults.items():
+        os.environ.setdefault(key, value)
+    return build_default_config()
+
+
+def analyse(graph: TradingAgentsGraph, ticker: str, date: str, attempts: int = 3):
+    for attempt in range(1, attempts + 1):
+        try:
+            state, rating = graph.propagate(ticker, date)
+            return state, rating
+        except Exception as exc:  # noqa: BLE001 — retried or reported below
+            if attempt == attempts or not any(k in str(exc) for k in TRANSIENT):
+                raise
+            time.sleep(60 * attempt)
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("tickers", nargs="+")
+    parser.add_argument("--date", help="Analysis date, YYYY-MM-DD (default: last completed session)")
+    parser.add_argument("--analysts", default="market,news")
+    args = parser.parse_args()
+
+    date = args.date or last_completed_session(dt.datetime.now(dt.UTC).date()).isoformat()
+    graph = TradingAgentsGraph(selected_analysts=args.analysts.split(","), config=config())
+
+    for ticker in args.tickers:
+        print(f"===== {ticker} (dati al {date}) =====")
+        try:
+            state, rating = analyse(graph, ticker, date)
+        except Exception as exc:  # noqa: BLE001 — one ticker must not stop the rest
+            print(f"ERRORE: {str(exc)[:500]}\n")
+            continue
+        print(f"MOSSA: {'SI' if rating in ACTIONABLE else 'NO'}  RATING: {rating}")
+        print(state["trader_investment_plan"])
+        print("\n--- Decisione finale ---")
+        print(state["final_trade_decision"], "\n", flush=True)
+
+
+if __name__ == "__main__":
+    main()
