@@ -25,6 +25,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
     "TRADINGAGENTS_LLM_MAX_RETRIES":      "llm_max_retries",
     "TRADINGAGENTS_MAX_TOKENS":           "max_tokens",
+    "TRADINGAGENTS_TRADING_HORIZON_DAYS": "trading_horizon_days",
+    "TRADINGAGENTS_HOLDING_PERIOD_DAYS":  "holding_period_days",
     # Provider-specific reasoning/thinking knobs (None = each provider's own
     # default). Settable here for non-interactive runs; the CLI also offers an
     # interactive choice, which is skipped when the matching var is set.
@@ -178,6 +180,11 @@ def build_default_config() -> dict:
         # Trading days after the analysis date over which a decision's outcome is
         # measured, for reflection and for the backtest figures.
         "holding_period_days": 5,
+        # Trading horizon, in trading days, the agents are told to plan for (entry,
+        # stop, target and exit within it). None leaves the horizon to the agents,
+        # who tend to reason in weeks to months. Set 1-2 for short-term trades and
+        # match holding_period_days so outcomes are scored over the same window.
+        "trading_horizon_days": None,
         "benchmark_ticker": None,
         "benchmark_map": {
             ".NS":  "^NSEI",       # NSE India (Nifty 50)

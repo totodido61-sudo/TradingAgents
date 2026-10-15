@@ -169,6 +169,38 @@ def build_instrument_context(
     return context
 
 
+def get_horizon_instruction() -> str:
+    """Return a prompt instruction for the configured trading horizon.
+
+    Empty when ``trading_horizon_days`` is unset, so the default run is
+    unchanged. When set, every agent that reads the instrument context is told
+    to judge the trade over that window, so a short-term run does not come back
+    with a multi-month thesis and a stop sized for it.
+    """
+    from tradingagents.dataflows.config import get_config
+    raw = get_config().get("trading_horizon_days")
+    if raw is None or str(raw).strip() == "":
+        return ""
+    try:
+        days = int(raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"trading_horizon_days must be a whole number of days, got {raw!r}") from exc
+    if days < 1:
+        raise ValueError(f"trading_horizon_days must be at least 1, got {days}")
+    window = "1 trading day" if days == 1 else f"{days} trading days"
+    return (
+        f"Trading horizon: this is a short-term trade to be opened and closed within {window}. "
+        "Judge the setup only over that window: weigh price action, momentum, volume, "
+        "the recent daily range (ATR) and near-term catalysts (news, earnings, macro "
+        "releases in the window) above long-term fundamentals. Size entry, stop-loss and "
+        "take-profit levels to the move the stock can realistically make in that window, "
+        "and state the time horizon in those terms, not in weeks or months. "
+        "Buy or Overweight means open a long position for the window, Sell or Underweight "
+        "means the window favours a short or staying out of a long, Hold means no trade "
+        "with a favourable risk/reward exists in the window."
+    )
+
+
 def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
     """Return the instrument context for the current run.
 
@@ -176,15 +208,17 @@ def get_instrument_context_from_state(state: Mapping[str, Any]) -> str:
     stored on the state (see ``TradingAgentsGraph.resolve_instrument_context``).
     Falls back to a ticker-only context — with no network lookup — when the
     state was constructed without it (bare programmatic states, tests), so a
-    consumer is never forced to make a yfinance call mid-graph.
+    consumer is never forced to make a yfinance call mid-graph. The configured
+    trading horizon, when set, is appended so every agent reads it.
     """
     context = state.get("instrument_context")
-    if isinstance(context, str) and context.strip():
-        return context
-    return build_instrument_context(
-        str(state["company_of_interest"]),
-        state.get("asset_type", "stock"),
-    )
+    if not (isinstance(context, str) and context.strip()):
+        context = build_instrument_context(
+            str(state["company_of_interest"]),
+            state.get("asset_type", "stock"),
+        )
+    horizon = get_horizon_instruction()
+    return f"{context} {horizon}" if horizon else context
 
 
 def report_or_absent(text: str, source: str) -> str:
