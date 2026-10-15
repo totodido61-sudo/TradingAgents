@@ -16,11 +16,36 @@ import datetime as dt
 import os
 import time
 
+from langchain_core.callbacks import UsageMetadataCallbackHandler
+
 from tradingagents.default_config import build_default_config
 from tradingagents.graph.trading_graph import TradingAgentsGraph
 
 ACTIONABLE = {"Buy", "Overweight", "Underweight", "Sell"}
 TRANSIENT = ("503", "UNAVAILABLE", "disconnected")
+# Paid-tier USD per 1M tokens (input, output), from ai.google.dev/gemini-api/docs/pricing.
+# gemini-3.8-flash doubles from 2027-01-01. Thinking tokens bill as output.
+PRICES = {
+    "gemini-3.8-flash": (0.75, 3.75),
+    "gemini-3.5-flash-lite": (0.30, 2.50),
+    "gemini-3.1-flash-lite": (0.25, 1.50),
+    "gemini-3.1-pro-preview": (2.00, 12.00),
+}
+
+
+def cost_line(usage: dict) -> str:
+    """Tokens and estimated USD cost per model, from a usage callback's totals."""
+    parts, total = [], 0.0
+    for model, u in usage.items():
+        name = model.removeprefix("models/")
+        tokens = f"{name}: {u.get('input_tokens', 0)} in / {u.get('output_tokens', 0)} out"
+        price = PRICES.get(name)
+        if price:
+            total += (u.get("input_tokens", 0) * price[0] + u.get("output_tokens", 0) * price[1]) / 1e6
+        else:
+            tokens += " (prezzo sconosciuto)"
+        parts.append(tokens)
+    return f"COSTO STIMATO: ${total:.3f}  ({'; '.join(parts)})"
 
 
 def last_completed_session(today: dt.date) -> dt.date:
@@ -34,7 +59,7 @@ def last_completed_session(today: dt.date) -> dt.date:
 def config() -> dict:
     env_defaults = {
         "TRADINGAGENTS_LLM_PROVIDER": "google",
-        "TRADINGAGENTS_DEEP_THINK_LLM": "gemini-3.5-flash",
+        "TRADINGAGENTS_DEEP_THINK_LLM": "gemini-3.8-flash",
         "TRADINGAGENTS_QUICK_THINK_LLM": "gemini-3.5-flash-lite",
         "TRADINGAGENTS_OUTPUT_LANGUAGE": "Italian",
         "TRADINGAGENTS_TRADING_STYLE": "intraday",
@@ -65,16 +90,22 @@ def main() -> None:
     args = parser.parse_args()
 
     date = args.date or last_completed_session(dt.datetime.now(dt.UTC).date()).isoformat()
-    graph = TradingAgentsGraph(selected_analysts=args.analysts.split(","), config=config())
+    cfg = config()
 
     for ticker in args.tickers:
         print(f"===== {ticker} (dati al {date}) =====")
+        usage = UsageMetadataCallbackHandler()
+        graph = TradingAgentsGraph(
+            selected_analysts=args.analysts.split(","), config=cfg, callbacks=[usage]
+        )
         try:
             state, rating = analyse(graph, ticker, date)
         except Exception as exc:  # noqa: BLE001 — one ticker must not stop the rest
-            print(f"ERRORE: {str(exc)[:500]}\n")
+            print(f"ERRORE: {str(exc)[:500]}")
+            print(cost_line(usage.usage_metadata), "\n")
             continue
         print(f"MOSSA: {'SI' if rating in ACTIONABLE else 'NO'}  RATING: {rating}")
+        print(cost_line(usage.usage_metadata))
         print(state["trader_investment_plan"])
         print("\n--- Decisione finale ---")
         print(state["final_trade_decision"], "\n", flush=True)
