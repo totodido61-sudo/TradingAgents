@@ -34,6 +34,35 @@ def get_language_instruction() -> str:
     )
 
 
+TRADING_STYLES = (None, "intraday")
+
+
+def get_trading_style_instruction() -> str:
+    """Return a prompt instruction for the configured ``trading_style``.
+
+    Returns empty string for the default style, so no extra tokens are used.
+    Applied to the agents that shape the decision — researchers, research
+    manager, trader, risk debaters and portfolio manager.
+    """
+    from tradingagents.dataflows.config import get_config
+    style = get_config().get("trading_style")
+    style = style.strip().lower() if isinstance(style, str) else style
+    if style in (None, "", "default"):
+        return ""
+    if style not in TRADING_STYLES:
+        raise ValueError(f"trading_style must be one of {TRADING_STYLES}, got {style!r}")
+    return (
+        " Trading style: intraday. Every recommendation is a single-session trade for the"
+        " next trading day: entered after the open and closed before the close, never held"
+        " overnight. Judge the call on the next session's expected move, momentum, volatility"
+        " (ATR), gaps and same-day catalysts; long-term fundamentals matter only as they move"
+        " price that day. The risk appetite is aggressive: accept wider swings and larger"
+        " position sizes for a stronger expected move, and still state the entry, a stop-loss"
+        " and a same-day profit target as absolute prices. Short the instrument (Sell /"
+        " Underweight) when the next session's edge is to the downside."
+    )
+
+
 def opponent_argument_or_opening(text: str, opponent: str) -> str:
     """Opponent's latest argument, or an explicit opening marker when empty.
 

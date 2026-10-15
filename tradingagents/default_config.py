@@ -25,6 +25,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_TEMPERATURE":          "temperature",
     "TRADINGAGENTS_LLM_MAX_RETRIES":      "llm_max_retries",
     "TRADINGAGENTS_MAX_TOKENS":           "max_tokens",
+    "TRADINGAGENTS_TRADING_STYLE":        "trading_style",
+    "TRADINGAGENTS_HOLDING_PERIOD_DAYS":  "holding_period_days",
     # Provider-specific reasoning/thinking knobs (None = each provider's own
     # default). Settable here for non-interactive runs; the CLI also offers an
     # interactive choice, which is skipped when the matching var is set.
@@ -129,6 +131,12 @@ def build_default_config() -> dict:
         # Output language for analyst reports and final decision
         # Internal agent debate stays in English for reasoning quality
         "output_language": "English",
+        # Horizon and risk appetite of the decision agents (researchers, managers,
+        # trader, risk debaters). None keeps their default multi-day stance;
+        # "intraday" asks for a single-session trade, opened and closed the same
+        # day, with an aggressive risk budget. Pair it with holding_period_days=1
+        # so reflection scores the call over the horizon it was made for.
+        "trading_style": None,
         # Debate and discussion settings
         "max_debate_rounds": 1,
         "max_risk_discuss_rounds": 1,
