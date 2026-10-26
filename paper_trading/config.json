@@ -1,0 +1,19 @@
+{
+  "tickers": ["AAPL", "NVDA", "MSFT"],
+  "initial_capital": 10000,
+  "currency": "EUR",
+  "fx_ticker": "EURUSD=X",
+  "benchmark": "SPY",
+  "fee_rate": 0.001,
+  "min_trade_fraction": 0.05,
+  "analysts": ["market", "news"],
+  "llm": {
+    "llm_provider": "google",
+    "deep_think_llm": "gemini-3.8-flash",
+    "quick_think_llm": "gemini-3.8-flash",
+    "max_debate_rounds": 1,
+    "max_risk_discuss_rounds": 1,
+    "llm_max_retries": 5,
+    "output_language": "Italian"
+  }
+}
